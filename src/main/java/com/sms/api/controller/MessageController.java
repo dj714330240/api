@@ -13,6 +13,9 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -43,6 +46,15 @@ public class MessageController {
     @Autowired
     SMSService smsService;
 
+    @Bean(name = "stringRedisTemplate")
+    public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory
+                                                           redisConnectionFactory){
+        return new StringRedisTemplate(redisConnectionFactory);
+    }
+
+
+    @Autowired
+    StringRedisTemplate stringRedisTemplate;
 
     @Autowired
     UserInfoUtil userInfoUtil;
@@ -117,9 +129,9 @@ public class MessageController {
     @GetMapping("/getMessage")
     public Map<String,Object> getMessage(String phone,String sign){
         Map<String,Object> data = new HashMap<>(3);
-        if (redisService.get(phone)!=null) {
+        if (redisService.hasKey(phone)) {
             data.put("code","1");
-            data.put("message",redisService.get(phone));
+            data.put("message",stringRedisTemplate.opsForValue().get(phone));
             System.out.println("消费---"+phone);
             return data;
         }else {

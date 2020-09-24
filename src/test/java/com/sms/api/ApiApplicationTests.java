@@ -5,15 +5,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class ApiApplicationTests {
+public class ApiApplicationTests {
 
-    @Autowired
-    SMSDao smsDao;
 
-//    @Test
-//    void contextLoads() {
-//        System.out.println(smsDao.getByPhone("18879713881"));
-//    }
+    public static void main(String[] args) {
+        System.out.println("CS200501032002899510");
+    }
 
 }
